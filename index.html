@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Reading Library — reading tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Quicksand:wght@400;500;600;700&family=Nunito+Sans:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Reading Library</h1>
+      <p>Your reading life, shelf by shelf.</p>
+    </div>
+    <div class="stats">
+      <div class="stat"><span class="n" id="statCount">0</span><span class="l" id="statCountLabel">Finished</span></div>
+      <div class="stat" id="statAvgWrap"><span class="n" id="statAvg">—</span><span class="l" id="statAvgLabel">Avg rating</span></div>
+      <div class="stat"><span class="n" id="statGenres">0</span><span class="l">Genres</span></div>
+    </div>
+  </header>
+
+  <div class="library-toggle" id="libraryToggle">
+    <button class="lib-pill" data-status="tbr">TBR <span class="lib-count" data-count-for="tbr">0</span></button>
+    <button class="lib-pill" data-status="reading">Reading <span class="lib-count" data-count-for="reading">0</span></button>
+    <button class="lib-pill active" data-status="completed">Completed <span class="lib-count" data-count-for="completed">0</span></button>
+    <button class="lib-pill" data-status="dnf">DNF <span class="lib-count" data-count-for="dnf">0</span></button>
+  </div>
+
+  <div class="toolbar">
+    <div class="filters">
+      <input type="text" id="searchInput" placeholder="Search title or author" style="min-width:200px;">
+      <select id="genreFilter"><option value="">All Genres</option></select>
+      <select id="sortSelect">
+        <option value="authorLast" selected>Author A-Z</option>
+        <option value="recent">Recently Finished</option>
+        <option value="title">Title A-Z</option>
+        <option value="rating">Highest Rated</option>
+      </select>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <button class="add-btn" id="exportBtn" style="background:var(--sky);box-shadow:0 6px 0 #3C9AB0;">Export</button>
+      <button class="add-btn" id="importBtn" style="background:var(--mint);box-shadow:0 6px 0 #2E9B7E;">Import</button>
+      <input type="file" id="importFile" accept="application/json,.json" style="display:none;">
+      <button class="add-btn" id="openAddBtn">+ Add a finished book</button>
+    </div>
+  </div>
+  <div id="ioStatus" style="font-size:12px;color:var(--ink-soft);font-weight:600;margin:-18px 0 20px;min-height:16px;"></div>
+
+  <div id="shelfContainer">
+    <div class="loading-note">Unpacking the shelf...</div>
+  </div>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="book-spread" id="bookSpread"></div>
+</div>
+
+<div class="overlay" id="confirmOverlay" style="z-index:60;">
+  <div class="confirm-box" id="confirmBox"></div>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>

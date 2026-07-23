@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find /Users/celinetsai/Desktop -iname \"*reading*tracker*\" 2>/dev/null)",
+      "Read(//private/tmp/**)",
+      "Bash(python3 -c ' *)"
+    ]
+  }
+}
