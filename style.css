@@ -498,6 +498,59 @@ header p{
   cursor:pointer;border:3px solid transparent;
 }
 .swatch.on{border-color:var(--ink);}
+.typeahead-wrap{position:relative;}
+.typeahead-dropdown{
+  position:absolute;
+  top:calc(100% + 6px);
+  left:0;
+  right:0;
+  background:var(--parchment-hi);
+  border:2px solid #FFDDBB;
+  border-radius:14px;
+  box-shadow:0 12px 28px rgba(58,46,77,0.2);
+  z-index:40;
+  max-height:220px;
+  overflow-y:auto;
+}
+#f_find_dropdown{
+  position:static;
+  margin-top:8px;
+  max-height:340px;
+}
+.typeahead-item{
+  padding:9px 14px;
+  font-family:'Quicksand', sans-serif;
+  font-weight:600;
+  font-size:13px;
+  color:var(--ink);
+  cursor:pointer;
+  border-bottom:1px solid #FFF3E0;
+}
+.typeahead-item:last-child{border-bottom:none;}
+.typeahead-item.active{background:#FFF3E0;}
+.typeahead-item .sub{
+  display:block;
+  font-weight:600;
+  font-size:11px;
+  color:var(--ink-soft);
+  margin-top:2px;
+}
+.find-book-link{
+  font-family:'Quicksand', sans-serif;
+  font-weight:700;
+  font-size:13px;
+  color:var(--coral);
+  cursor:pointer;
+  text-decoration:underline;
+  display:inline-block;
+}
+.find-book-link.prominent{
+  text-decoration:none;
+  background:var(--coral);
+  color:#fff;
+  padding:8px 16px;
+  border-radius:16px;
+}
 .form-submit{
   margin-top:6px;
   background:var(--grass);
