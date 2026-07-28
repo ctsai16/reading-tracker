@@ -6,7 +6,6 @@ let editingId = null;
 const STATUS_META = {
   tbr: {
     pillLabel: 'TBR',
-    addBtnLabel: '+ Add to TBR',
     emptyMsg: 'Your TBR shelf is empty.',
     emptyCta: 'Add the first book to your TBR list',
     formTitleNew: 'Add to your TBR list',
@@ -22,7 +21,6 @@ const STATUS_META = {
   },
   reading: {
     pillLabel: 'Reading',
-    addBtnLabel: '+ Add to Currently Reading',
     emptyMsg: 'Nothing here yet.',
     emptyCta: 'Add a book you are currently reading',
     formTitleNew: 'Add a book you are reading',
@@ -38,7 +36,6 @@ const STATUS_META = {
   },
   completed: {
     pillLabel: 'Completed',
-    addBtnLabel: '+ Add a finished book',
     emptyMsg: 'Your shelf is empty.',
     emptyCta: 'Add the first book you finished',
     formTitleNew: 'Add a finished book',
@@ -54,7 +51,6 @@ const STATUS_META = {
   },
   dnf: {
     pillLabel: 'DNF',
-    addBtnLabel: '+ Add to Did Not Finish',
     emptyMsg: 'Nothing here yet.',
     emptyCta: 'Add a book you did not finish',
     formTitleNew: 'Add a book you did not finish',
@@ -152,6 +148,14 @@ async function loadBooks(){
     return Object.assign({}, b, { status, dateAdded, history });
   });
 
+  books = books.map(b => {
+    if (b.dateStarted || !b.history || !b.history.length) return b;
+    const readingEntries = b.history.filter(h => h.status === 'reading');
+    if (!readingEntries.length) return b;
+    migrated = true;
+    return Object.assign({}, b, { dateStarted: readingEntries[readingEntries.length - 1].date });
+  });
+
   const seenKeys = new Set();
   const deduped = [];
   books.forEach(b => {
@@ -245,6 +249,12 @@ function authorLastName(author){
   return parts.length ? parts[parts.length - 1] : '';
 }
 
+function daysBetweenInclusive(startStr, endStr){
+  const start = new Date(startStr + 'T00:00:00');
+  const end = new Date(endStr + 'T00:00:00');
+  return Math.round((end - start) / 86400000) + 1;
+}
+
 function matchesFilter(b){
   if (b.status !== currentLibrary) return false;
   const s = currentFilter.search.trim().toLowerCase();
@@ -324,7 +334,7 @@ function render(){
 
   if (libraryBooks.length === 0){
     container.innerHTML = '<div class="shelf-unit"><div class="shelf-row"><div class="spines"><div class="empty-shelf">'+meta.emptyMsg+'<span class="cta" id="emptyAddLink">'+meta.emptyCta+'</span></div></div><div class="plank"></div></div></div>';
-    document.getElementById('emptyAddLink').onclick = openAddForm;
+    document.getElementById('emptyAddLink').onclick = openFindBookForm;
     return;
   }
 
@@ -385,7 +395,9 @@ function openDetail(id){
   const pubLine = pubBits.length ? '<div class="date-line">'+pubBits.join(' · ')+'</div>' : '';
   const addedLine = (!meta.showDate && b.dateAdded) ? '<div class="date-line">Added '+escapeHtml(b.dateAdded)+'</div>' : '';
   const finishedLine = (meta.showDate && b.dateFinished) ? '<div class="date-line">'+meta.dateLabel+' '+escapeHtml(b.dateFinished)+'</div>' : '';
-  const dateBlock = finishedLine + addedLine + pubLine;
+  const readingDays = (b.status === 'completed' && b.dateStarted && b.dateFinished) ? Math.max(1, daysBetweenInclusive(b.dateStarted, b.dateFinished)) : null;
+  const readingDurationLine = readingDays ? '<div class="date-line">Read in '+readingDays+' day'+(readingDays === 1 ? '' : 's')+'</div>' : '';
+  const dateBlock = finishedLine + readingDurationLine + addedLine + pubLine;
   const hardCopyBlock = '<div class="field-label">Hard copy</div><div style="display:flex;align-items:center;gap:8px;font-size:14px;color:var(--ink);">' +
     '<i style="display:inline-block;width:18px;height:18px;border-radius:5px;background:'+(b.ownsHardCopy?'var(--grass)':'#EFE7D6')+';position:relative;flex-shrink:0;">' +
     (b.ownsHardCopy ? '<span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;font-weight:700;">✓</span>' : '') +
@@ -479,8 +491,9 @@ async function retryReading(id){
   const idx = books.findIndex(x => x.id === id);
   if (idx === -1) return;
   const history = (books[idx].history ? books[idx].history.slice() : []);
-  history.push({ status: 'reading', date: new Date().toISOString().slice(0, 10) });
-  books[idx] = Object.assign({}, books[idx], { status: 'reading', history: history });
+  const startDate = new Date().toISOString().slice(0, 10);
+  history.push({ status: 'reading', date: startDate });
+  books[idx] = Object.assign({}, books[idx], { status: 'reading', dateStarted: startDate, history: history });
   await saveBooks();
   if (currentLibrary !== 'reading'){
     currentLibrary = 'reading';
@@ -495,8 +508,9 @@ async function rereadBook(id){
   const idx = books.findIndex(x => x.id === id);
   if (idx === -1) return;
   const history = (books[idx].history ? books[idx].history.slice() : []);
-  history.push({ status: 'reading', date: new Date().toISOString().slice(0, 10), label: 'Marked as reread' });
-  books[idx] = Object.assign({}, books[idx], { status: 'reading', history: history });
+  const startDate = new Date().toISOString().slice(0, 10);
+  history.push({ status: 'reading', date: startDate, label: 'Marked as reread' });
+  books[idx] = Object.assign({}, books[idx], { status: 'reading', dateStarted: startDate, history: history });
   await saveBooks();
   if (currentLibrary !== 'reading'){
     currentLibrary = 'reading';
@@ -566,11 +580,253 @@ function openEditForm(id){
   renderForm(b);
 }
 
-function renderForm(existing, forceStatus){
+function guessGenre(subjects){
+  if (!subjects || !subjects.length) return null;
+  const text = subjects.join(' | ').toLowerCase();
+  const rules = [
+    [/fantasy/, 'Fantasy'],
+    [/science fiction|sci-fi/, 'Sci-Fi'],
+    [/romance/, 'Romance'],
+    [/mystery|detective|thriller|crime/, 'Mystery/Thriller'],
+    [/horror/, 'Horror'],
+    [/young adult|juvenile fiction|teen/, 'Young Adult'],
+    [/poetry|poems/, 'Poetry'],
+    [/memoir|autobiograph/, 'Memoir'],
+    [/historical fiction/, 'Historical Fiction'],
+    [/classic/, 'Classic']
+  ];
+  for (const rule of rules){
+    if (rule[0].test(text)) return rule[1];
+  }
+  if (/fiction/.test(text)) return 'Fiction';
+  if (/biography|history|science|business|self-help|psychology|philosophy|essay/.test(text)) return 'Nonfiction';
+  return null;
+}
+
+function setupTypeahead(inputId, dropdownId, fetchResults, renderItem, onSelect, onEmptyChange){
+  const inputEl = document.getElementById(inputId);
+  const dropdownEl = document.getElementById(dropdownId);
+  if (!inputEl || !dropdownEl) return;
+  let debounceTimer = null;
+  let requestSeq = 0;
+  let currentResults = [];
+  let activeIndex = -1;
+
+  function hideDropdown(){
+    dropdownEl.style.display = 'none';
+    dropdownEl.innerHTML = '';
+    currentResults = [];
+    activeIndex = -1;
+  }
+
+  function updateActiveHighlight(){
+    dropdownEl.querySelectorAll('.typeahead-item').forEach((el, i) => {
+      el.classList.toggle('active', i === activeIndex);
+    });
+    const activeEl = dropdownEl.querySelector('.typeahead-item.active');
+    if (activeEl && activeEl.scrollIntoView) activeEl.scrollIntoView({ block: 'nearest' });
+  }
+
+  function selectIndex(i){
+    if (i < 0 || i >= currentResults.length) return;
+    onSelect(currentResults[i]);
+    hideDropdown();
+  }
+
+  function showResults(results){
+    currentResults = results || [];
+    activeIndex = -1;
+    if (!currentResults.length){
+      hideDropdown();
+      if (onEmptyChange) onEmptyChange(true);
+      return;
+    }
+    if (onEmptyChange) onEmptyChange(false);
+    dropdownEl.innerHTML = currentResults.map((r, i) => '<div class="typeahead-item" data-idx="'+i+'">'+renderItem(r)+'</div>').join('');
+    dropdownEl.style.display = 'block';
+    dropdownEl.querySelectorAll('.typeahead-item').forEach((el, i) => {
+      el.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        selectIndex(i);
+      });
+      el.addEventListener('mouseenter', () => {
+        activeIndex = i;
+        updateActiveHighlight();
+      });
+    });
+  }
+
+  inputEl.addEventListener('input', () => {
+    clearTimeout(debounceTimer);
+    const query = inputEl.value.trim();
+    if (query.length < 3){
+      hideDropdown();
+      if (onEmptyChange) onEmptyChange(false);
+      return;
+    }
+    debounceTimer = setTimeout(async () => {
+      const seq = ++requestSeq;
+      try {
+        const results = await fetchResults(query);
+        if (seq !== requestSeq) return;
+        showResults(results);
+      } catch (err) {
+        if (seq !== requestSeq) return;
+        hideDropdown();
+      }
+    }, 350);
+  });
+
+  inputEl.addEventListener('keydown', (e) => {
+    const isOpen = dropdownEl.style.display !== 'none' && currentResults.length > 0;
+    if (e.key === 'ArrowDown'){
+      if (!isOpen) return;
+      e.preventDefault();
+      activeIndex = (activeIndex + 1) % currentResults.length;
+      updateActiveHighlight();
+      return;
+    }
+    if (e.key === 'ArrowUp'){
+      if (!isOpen) return;
+      e.preventDefault();
+      activeIndex = (activeIndex - 1 + currentResults.length) % currentResults.length;
+      updateActiveHighlight();
+      return;
+    }
+    if (e.key === 'Enter'){
+      if (!isOpen || activeIndex < 0) return;
+      e.preventDefault();
+      selectIndex(activeIndex);
+      return;
+    }
+    if (e.key === 'Escape'){
+      if (!isOpen) return;
+      hideDropdown();
+      e.stopPropagation();
+    }
+  });
+
+  inputEl.addEventListener('blur', () => {
+    setTimeout(hideDropdown, 150);
+  });
+}
+
+async function fetchTitleResults(query){
+  const url = 'https://openlibrary.org/search.json?title=' + encodeURIComponent(query) + '&fields=title,author_name,first_publish_year,number_of_pages_median,publisher,subject&limit=5';
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('bad response');
+  const data = await res.json();
+  return data.docs || [];
+}
+
+function renderTitleItem(doc){
+  const author = (doc.author_name && doc.author_name[0]) || 'Unknown author';
+  const year = doc.first_publish_year ? ' (' + doc.first_publish_year + ')' : '';
+  return '<strong>' + escapeHtml(doc.title || '') + '</strong> — ' + escapeHtml(author) + year;
+}
+
+function selectTitleResult(doc){
+  const titleEl = document.getElementById('f_title');
+  if (titleEl) titleEl.value = doc.title || '';
+  const authorEl = document.getElementById('f_author');
+  if (authorEl && doc.author_name && doc.author_name.length) authorEl.value = doc.author_name[0];
+  const genreSel = document.getElementById('f_genre');
+  if (genreSel && !genreSel.value){
+    const guessed = guessGenre(doc.subject);
+    if (guessed) genreSel.value = guessed;
+  }
+  const pagesEl = document.getElementById('f_pages');
+  if (pagesEl && doc.number_of_pages_median) pagesEl.value = doc.number_of_pages_median;
+  const publisherEl = document.getElementById('f_publisher');
+  if (publisherEl && doc.publisher && doc.publisher.length) publisherEl.value = doc.publisher[0];
+  const publishYearEl = document.getElementById('f_publish_year');
+  if (publishYearEl && doc.first_publish_year) publishYearEl.value = doc.first_publish_year;
+}
+
+async function fetchAuthorResults(query){
+  const url = 'https://openlibrary.org/search/authors.json?q=' + encodeURIComponent(query) + '&limit=5';
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('bad response');
+  const data = await res.json();
+  return data.docs || [];
+}
+
+function renderAuthorItem(doc){
+  const name = doc.name || 'Unknown';
+  const workCount = doc.work_count ? doc.work_count + ' works' : '';
+  return escapeHtml(name) + (workCount ? '<span class="sub">' + escapeHtml(workCount) + '</span>' : '');
+}
+
+function selectAuthorResult(doc){
+  const authorEl = document.getElementById('f_author');
+  if (authorEl) authorEl.value = doc.name || '';
+}
+
+async function fetchFindResults(query){
+  const url = 'https://openlibrary.org/search.json?q=' + encodeURIComponent(query) + '&fields=title,author_name,first_publish_year,number_of_pages_median,publisher,subject&limit=25';
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('bad response');
+  const data = await res.json();
+  return data.docs || [];
+}
+
+function renderFindItem(doc){
+  const author = (doc.author_name && doc.author_name[0]) || 'Unknown author';
+  const year = doc.first_publish_year ? ' (' + doc.first_publish_year + ')' : '';
+  return '<strong>' + escapeHtml(doc.title || '') + '</strong> — ' + escapeHtml(author) + year;
+}
+
+function selectFindResult(doc){
+  const prefill = {
+    title: doc.title || '',
+    author: (doc.author_name && doc.author_name[0]) || '',
+    genre: guessGenre(doc.subject) || '',
+    pages: doc.number_of_pages_median || null,
+    publisher: (doc.publisher && doc.publisher[0]) || '',
+    publishYear: doc.first_publish_year || null
+  };
+  editingId = null;
+  renderForm(null, null, prefill);
+}
+
+function openFindBookForm(){
+  editingId = null;
   const overlay = document.getElementById('overlay');
   const spread = document.getElementById('bookSpread');
-  const b = existing || { title:'', author:'', genre:'', rating:0, spice:null, review:'', dateFinished:'', color:'', series:null, seriesOrder:null, ownsHardCopy:false, pages:null, publisher:'', publishYear:null, format:null };
+  spread.classList.add('no-spine');
+  spread.innerHTML =
+    '<button class="close-x" id="closeBtn" aria-label="Close">×</button>' +
+    '<div class="page left" style="grid-column:1 / -1;">' +
+      '<h2 class="book-title">Find a book</h2>' +
+      '<div class="form-grid">' +
+        '<div class="typeahead-wrap">' +
+          '<label>Search</label>' +
+          '<input type="text" id="f_find_search" placeholder="Search by title or author..." autocomplete="off">' +
+          '<div class="typeahead-dropdown" id="f_find_dropdown" style="display:none;"></div>' +
+        '</div>' +
+        '<div>' +
+          '<span class="find-book-link" id="f_skip_bottom">Can’t find your book? Add it manually</span>' +
+          '<div id="f_find_no_results" style="display:none;font-size:12px;color:var(--ink-soft);margin-top:6px;">No matches — try different words, or add the details yourself.</div>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  overlay.classList.add('open');
+  document.getElementById('closeBtn').onclick = closeOverlay;
+  document.getElementById('f_skip_bottom').onclick = () => openAddForm();
+  setupTypeahead('f_find_search', 'f_find_dropdown', fetchFindResults, renderFindItem, selectFindResult, (isEmpty) => {
+    const bottomLink = document.getElementById('f_skip_bottom');
+    const noResultsMsg = document.getElementById('f_find_no_results');
+    if (bottomLink) bottomLink.classList.toggle('prominent', isEmpty);
+    if (noResultsMsg) noResultsMsg.style.display = isEmpty ? 'block' : 'none';
+  });
+}
+
+function renderForm(existing, forceStatus, prefill){
+  const overlay = document.getElementById('overlay');
+  const spread = document.getElementById('bookSpread');
+  const b = existing || Object.assign({ title:'', author:'', genre:'', rating:0, spice:null, review:'', dateFinished:'', color:'', series:null, seriesOrder:null, ownsHardCopy:false, pages:null, publisher:'', publishYear:null, format:null }, prefill || {});
   const formStatus = forceStatus || (existing ? (existing.status || 'completed') : currentLibrary);
+  let addShelf = formStatus;
   const justMoved = !!forceStatus && existing && existing.status !== forceStatus;
   const isMinimalTransition = justMoved && (formStatus === 'dnf' || (formStatus === 'completed' && existing.status !== 'reading'));
   const isMediumTransition = justMoved && formStatus === 'completed' && existing.status === 'reading';
@@ -642,22 +898,18 @@ function renderForm(existing, forceStatus){
         '<button class="form-submit" id="f_submit">'+submitLabel+'</button>' +
       '</div>' +
     '</div>'
-    :
+    : existing ?
     '<button class="close-x" id="closeBtn" aria-label="Close">×</button>' +
     '<div class="page left" style="grid-column:1 / -1;">' +
       '<h2 class="book-title">'+formTitle+'</h2>' +
       '<div class="form-grid">' +
-        '<div><label>Title</label><input type="text" id="f_title" value="'+escapeHtml(b.title)+'" placeholder="a book title"></div>' +
+        '<div class="typeahead-wrap"><label>Title</label><input type="text" id="f_title" value="'+escapeHtml(b.title)+'" placeholder="a book title" autocomplete="off"><div class="typeahead-dropdown" id="f_title_dropdown" style="display:none;"></div></div>' +
         '<div class="two-col">' +
-          '<div><label>Author</label><input type="text" id="f_author" value="'+escapeHtml(b.author)+'" placeholder="Author name"></div>' +
+          '<div class="typeahead-wrap"><label>Author</label><input type="text" id="f_author" value="'+escapeHtml(b.author)+'" placeholder="Author name" autocomplete="off"><div class="typeahead-dropdown" id="f_author_dropdown" style="display:none;"></div></div>' +
           '<div><label>Genre</label><select id="f_genre">' +
             '<option value="">Choose a genre</option>' +
             genreOptions.map(g => '<option value="'+g+'"'+(b.genre===g?' selected':'')+'>'+g+'</option>').join('') +
           '</select></div>' +
-        '</div>' +
-        '<div>' +
-          '<button type="button" id="f_lookup_btn" style="background:var(--sun);color:#7A4E00;border:none;font-family:Quicksand, sans-serif;font-weight:700;font-size:12px;padding:8px 16px;border-radius:16px;cursor:pointer;">Autofill page count, publisher &amp; genre</button>' +
-          '<span id="f_lookup_status" style="font-size:12px;color:var(--ink-soft);margin-left:8px;"></span>' +
         '</div>' +
         ratingDateFields +
         '<div class="two-col">' +
@@ -683,6 +935,53 @@ function renderForm(existing, forceStatus){
         '<div><label>'+reviewLabel+'</label><textarea id="f_review" placeholder="'+reviewPlaceholder+'">'+escapeHtml(b.review)+'</textarea></div>' +
         '<div class="form-error" id="f_error" style="display:none;"></div>' +
         '<button class="form-submit" id="f_submit">'+submitLabel+'</button>' +
+      '</div>' +
+    '</div>'
+    :
+    '<button class="close-x" id="closeBtn" aria-label="Close">×</button>' +
+    '<div class="page left" style="grid-column:1 / -1;">' +
+      '<h2 class="book-title">Add a book</h2>' +
+      '<div class="form-grid">' +
+        '<div><label>Add to shelf</label><div class="format-picker" id="f_shelf">' +
+          Object.keys(STATUS_META).map(k => '<button type="button" class="format-option'+(k===addShelf?' on':'')+'" data-shelf="'+k+'">'+STATUS_META[k].pillLabel+'</button>').join('') +
+        '</div></div>' +
+        '<div class="typeahead-wrap"><label>Title</label><input type="text" id="f_title" value="'+escapeHtml(b.title)+'" placeholder="a book title" autocomplete="off"><div class="typeahead-dropdown" id="f_title_dropdown" style="display:none;"></div></div>' +
+        '<div class="two-col">' +
+          '<div class="typeahead-wrap"><label>Author</label><input type="text" id="f_author" value="'+escapeHtml(b.author)+'" placeholder="Author name" autocomplete="off"><div class="typeahead-dropdown" id="f_author_dropdown" style="display:none;"></div></div>' +
+          '<div><label>Genre</label><select id="f_genre">' +
+            '<option value="">Choose a genre</option>' +
+            genreOptions.map(g => '<option value="'+g+'"'+(b.genre===g?' selected':'')+'>'+g+'</option>').join('') +
+          '</select></div>' +
+        '</div>' +
+        '<div id="f_ratingdate_wrap">' +
+          '<div id="f_rating_wrap"><label>Your rating <span style="text-transform:none;font-weight:600;color:var(--ink-soft);">(tap left/right half of a star for half ratings)</span></label><div class="star-picker" id="f_stars"></div><span id="f_stars_readout" style="font-size:12px;color:var(--ink-soft);font-weight:600;display:block;margin-top:4px;"></span></div>' +
+          '<div id="f_date_wrap"><label id="f_date_label">'+meta.dateLabel+'</label><input type="date" id="f_date" value=""></div>' +
+        '</div>' +
+        '<div class="two-col">' +
+          '<div><label>Page count <span style="text-transform:none;font-weight:600;color:var(--ink-soft);">(sets spine thickness)</span></label><input type="text" inputmode="numeric" id="f_pages" value="'+(b.pages||'')+'" placeholder="e.g. 320"></div>' +
+          '<div><label>Publish year</label><input type="text" inputmode="numeric" id="f_publish_year" value="'+(b.publishYear||'')+'" placeholder="e.g. 2011"></div>' +
+        '</div>' +
+        '<div><label>Publisher</label><input type="text" id="f_publisher" value="'+escapeHtml(b.publisher||'')+'" placeholder="e.g. Tor Books"></div>' +
+        '<div id="f_spice_wrap">' +
+          '<label>Spice level <span class="spice-none-toggle" id="f_spice_toggle">set a level</span></label>' +
+          '<div class="spice-picker" id="f_spice" style="display:none;"></div>' +
+        '</div>' +
+        '<div>' +
+          '<label>Series <span class="spice-none-toggle" id="f_series_toggle">part of a series?</span></label>' +
+          '<div class="two-col" id="f_series_fields" style="display:none;">' +
+            '<input type="text" id="f_series_name" list="seriesList" value="" placeholder="Series name">' +
+            '<input type="number" id="f_series_order" min="1" value="" placeholder="Book # in series">' +
+          '</div>' +
+          seriesDatalist +
+        '</div>' +
+        '<div><label>Spine color</label><div class="color-picker" id="f_colors"></div></div>' +
+        '<div><label>Format</label><div class="format-picker" id="f_format"></div></div>' +
+        '<div style="display:flex;align-items:center;gap:8px;">' +
+          '<input type="checkbox" id="f_hardcopy" style="width:20px;height:20px;accent-color:var(--coral);">' +
+          '<label for="f_hardcopy" style="margin:0;text-transform:none;font-size:14px;color:var(--ink);">I own a hard copy of this book</label>' +
+        '</div>' +
+        '<div class="form-error" id="f_error" style="display:none;"></div>' +
+        '<button class="form-submit" id="f_submit">'+meta.submitLabelNew+'</button>' +
       '</div>' +
     '</div>';
 
@@ -758,75 +1057,57 @@ function renderForm(existing, forceStatus){
     }
   };
 
-function guessGenre(subjects){
-  if (!subjects || !subjects.length) return null;
-  const text = subjects.join(' | ').toLowerCase();
-  const rules = [
-    [/fantasy/, 'Fantasy'],
-    [/science fiction|sci-fi/, 'Sci-Fi'],
-    [/romance/, 'Romance'],
-    [/mystery|detective|thriller|crime/, 'Mystery/Thriller'],
-    [/horror/, 'Horror'],
-    [/young adult|juvenile fiction|teen/, 'Young Adult'],
-    [/poetry|poems/, 'Poetry'],
-    [/memoir|autobiograph/, 'Memoir'],
-    [/historical fiction/, 'Historical Fiction'],
-    [/classic/, 'Classic']
-  ];
-  for (const rule of rules){
-    if (rule[0].test(text)) return rule[1];
+  const shelfWrapEl = document.getElementById('f_shelf');
+  if (shelfWrapEl){
+    const applyShelfMeta = (key) => {
+      const m = STATUS_META[key];
+      const rdWrapEl = document.getElementById('f_ratingdate_wrap');
+      const ratingWrapEl = document.getElementById('f_rating_wrap');
+      const dateWrapEl = document.getElementById('f_date_wrap');
+      const spiceWrapOuter = document.getElementById('f_spice_wrap');
+      const submitBtnEl = document.getElementById('f_submit');
+      if (rdWrapEl){
+        if (!m.showRating && !m.showDate){
+          rdWrapEl.style.display = 'none';
+        } else {
+          rdWrapEl.className = (m.showRating && m.showDate) ? 'two-col' : '';
+          rdWrapEl.style.display = (m.showRating && m.showDate) ? 'grid' : 'block';
+        }
+      }
+      if (ratingWrapEl){
+        ratingWrapEl.style.display = m.showRating ? '' : 'none';
+        if (!m.showRating){ rating = 0; drawStars(); }
+      }
+      if (dateWrapEl){
+        dateWrapEl.style.display = m.showDate ? '' : 'none';
+        const dateLabelEl = document.getElementById('f_date_label');
+        if (dateLabelEl) dateLabelEl.textContent = m.dateLabel;
+        if (!m.showDate){ const dEl = document.getElementById('f_date'); if (dEl) dEl.value = ''; }
+      }
+      if (spiceWrapOuter){
+        spiceWrapOuter.style.display = m.showSpice ? '' : 'none';
+        if (!m.showSpice){
+          spiceVal = null;
+          if (spiceWrap) spiceWrap.style.display = 'none';
+          const spiceToggle2 = document.getElementById('f_spice_toggle');
+          if (spiceToggle2) spiceToggle2.textContent = 'set a level';
+        }
+      }
+      if (submitBtnEl) submitBtnEl.textContent = m.submitLabelNew;
+    };
+    shelfWrapEl.querySelectorAll('.format-option').forEach(btn => {
+      btn.onclick = () => {
+        addShelf = btn.dataset.shelf;
+        shelfWrapEl.querySelectorAll('.format-option').forEach(x => x.classList.remove('on'));
+        btn.classList.add('on');
+        applyShelfMeta(addShelf);
+      };
+    });
+    applyShelfMeta(addShelf);
   }
-  if (/fiction/.test(text)) return 'Fiction';
-  if (/biography|history|science|business|self-help|psychology|philosophy|essay/.test(text)) return 'Nonfiction';
-  return null;
-}
 
-const lookupBtnEl = document.getElementById('f_lookup_btn');
-if (lookupBtnEl) lookupBtnEl.onclick = async () => {
-    const titleVal = document.getElementById('f_title').value.trim();
-    const authorVal = document.getElementById('f_author').value.trim();
-    const statusEl = document.getElementById('f_lookup_status');
-    if (!titleVal){
-      statusEl.textContent = 'Enter a title first.';
-      return;
-    }
-    statusEl.textContent = 'Searching Open Library...';
-    try {
-      let url = 'https://openlibrary.org/search.json?title=' + encodeURIComponent(titleVal);
-      if (authorVal) url += '&author=' + encodeURIComponent(authorVal);
-      url += '&fields=title,author_name,first_publish_year,number_of_pages_median,publisher,subject&limit=1';
-      const res = await fetch(url);
-      if (!res.ok) throw new Error('bad response');
-      const data = await res.json();
-      const doc = data.docs && data.docs[0];
-      if (!doc){
-        statusEl.textContent = 'No match found — enter details manually.';
-        return;
-      }
-      let filled = [];
-      if (doc.number_of_pages_median){
-        document.getElementById('f_pages').value = doc.number_of_pages_median;
-        filled.push('pages');
-      }
-      if (doc.first_publish_year){
-        document.getElementById('f_publish_year').value = doc.first_publish_year;
-        filled.push('publish year');
-      }
-      if (doc.publisher && doc.publisher.length){
-        document.getElementById('f_publisher').value = doc.publisher[0];
-        filled.push('publisher');
-      }
-      const genreSel = document.getElementById('f_genre');
-      const guessed = guessGenre(doc.subject);
-      if (guessed && !genreSel.value){
-        genreSel.value = guessed;
-        filled.push('genre (best guess)');
-      }
-      statusEl.textContent = filled.length ? ('Filled in ' + filled.join(', ') + '.') : 'Found the book, but no extra details were available.';
-    } catch (err) {
-      statusEl.textContent = 'Could not reach Open Library — enter details manually.';
-    }
-  };
+setupTypeahead('f_title', 'f_title_dropdown', fetchTitleResults, renderTitleItem, selectTitleResult);
+setupTypeahead('f_author', 'f_author_dropdown', fetchAuthorResults, renderAuthorItem, selectAuthorResult);
 
   let colorVal = b.color || '';
   const colorWrap = document.getElementById('f_colors');
@@ -909,12 +1190,14 @@ if (lookupBtnEl) lookupBtnEl.onclick = async () => {
       return;
     }
 
-    const newStatus = forceStatus || (existing ? (existing.status || 'completed') : currentLibrary);
+    const newStatus = forceStatus || (existing ? (existing.status || 'completed') : addShelf);
     const oldStatus = existing ? (existing.status || 'completed') : null;
     const history = existing ? (existing.history ? existing.history.slice() : []) : [];
     if (!existing || oldStatus !== newStatus){
       history.push({ status: newStatus, date: new Date().toISOString().slice(0, 10) });
     }
+    const dateStarted = (newStatus === 'reading' && oldStatus !== 'reading') ?
+      new Date().toISOString().slice(0, 10) : (existing ? (existing.dateStarted || null) : null);
 
     const bookData = {
       id: existing ? existing.id : Date.now(),
@@ -922,6 +1205,7 @@ if (lookupBtnEl) lookupBtnEl.onclick = async () => {
       rating: rating || null,
       spice: spiceVal,
       review, dateFinished,
+      dateStarted,
       color: colorVal,
       series: seriesName || null,
       seriesOrder: seriesOrderRaw ? parseInt(seriesOrderRaw) : null,
@@ -952,10 +1236,10 @@ if (lookupBtnEl) lookupBtnEl.onclick = async () => {
   };
 }
 
-document.getElementById('openAddBtn').addEventListener('click', openAddForm);
+document.getElementById('openAddBtn').addEventListener('click', openFindBookForm);
 
 function updateAddButtonLabel(){
-  document.getElementById('openAddBtn').textContent = STATUS_META[currentLibrary].addBtnLabel;
+  document.getElementById('openAddBtn').textContent = '+ Add a book';
 }
 
 function switchLibrary(status){
