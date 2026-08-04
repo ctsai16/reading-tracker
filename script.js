@@ -725,7 +725,7 @@ function setupTypeahead(inputId, dropdownId, fetchResults, renderItem, onSelect,
 }
 
 async function fetchTitleResults(query){
-  const url = 'https://openlibrary.org/search.json?title=' + encodeURIComponent(query) + '&fields=title,author_name,first_publish_year,number_of_pages_median,publisher,subject&limit=5';
+  const url = 'https://openlibrary.org/search.json?title=' + encodeURIComponent(query) + '&fields=title,author_name,first_publish_year,number_of_pages_median,publisher,subject,series_name,series_position&limit=5';
   const res = await fetch(url);
   if (!res.ok) throw new Error('bad response');
   const data = await res.json();
@@ -754,6 +754,18 @@ function selectTitleResult(doc){
   if (publisherEl && doc.publisher && doc.publisher.length) publisherEl.value = doc.publisher[0];
   const publishYearEl = document.getElementById('f_publish_year');
   if (publishYearEl && doc.first_publish_year) publishYearEl.value = doc.first_publish_year;
+  const seriesNameEl = document.getElementById('f_series_name');
+  const seriesOrderEl = document.getElementById('f_series_order');
+  if (seriesNameEl && seriesOrderEl && !seriesNameEl.value.trim() && doc.series_name && doc.series_name.length){
+    seriesNameEl.value = doc.series_name[0];
+    if (doc.series_position && doc.series_position.length) seriesOrderEl.value = doc.series_position[0];
+    const seriesFieldsEl = document.getElementById('f_series_fields');
+    const seriesToggleEl = document.getElementById('f_series_toggle');
+    if (seriesFieldsEl && seriesFieldsEl.style.display === 'none'){
+      seriesFieldsEl.style.display = 'grid';
+      if (seriesToggleEl) seriesToggleEl.textContent = 'remove from series';
+    }
+  }
 }
 
 async function fetchAuthorResults(query){
@@ -776,7 +788,7 @@ function selectAuthorResult(doc){
 }
 
 async function fetchFindResults(query){
-  const url = 'https://openlibrary.org/search.json?q=' + encodeURIComponent(query) + '&fields=title,author_name,first_publish_year,number_of_pages_median,publisher,subject&limit=25';
+  const url = 'https://openlibrary.org/search.json?q=' + encodeURIComponent(query) + '&fields=title,author_name,first_publish_year,number_of_pages_median,publisher,subject,series_name,series_position&limit=25';
   const res = await fetch(url);
   if (!res.ok) throw new Error('bad response');
   const data = await res.json();
@@ -796,7 +808,9 @@ function selectFindResult(doc){
     genre: guessGenre(doc.subject) || '',
     pages: doc.number_of_pages_median || null,
     publisher: (doc.publisher && doc.publisher[0]) || '',
-    publishYear: doc.first_publish_year || null
+    publishYear: doc.first_publish_year || null,
+    series: (doc.series_name && doc.series_name[0]) || null,
+    seriesOrder: (doc.series_position && doc.series_position[0]) || null
   };
   editingId = null;
   renderForm(null, null, prefill);
@@ -980,10 +994,10 @@ function renderForm(existing, forceStatus, prefill){
           '<div class="spice-picker" id="f_spice" style="display:none;"></div>' +
         '</div>' +
         '<div>' +
-          '<label>Series <span class="spice-none-toggle" id="f_series_toggle">part of a series?</span></label>' +
-          '<div class="two-col" id="f_series_fields" style="display:none;">' +
-            '<input type="text" id="f_series_name" list="seriesList" value="" placeholder="Series name">' +
-            '<input type="number" id="f_series_order" min="1" value="" placeholder="Book # in series">' +
+          '<label>Series <span class="spice-none-toggle" id="f_series_toggle">'+(b.series?'remove from series':'part of a series?')+'</span></label>' +
+          '<div class="two-col" id="f_series_fields" style="'+(b.series?'':'display:none;')+'">' +
+            '<input type="text" id="f_series_name" list="seriesList" value="'+escapeHtml(b.series||'')+'" placeholder="Series name">' +
+            '<input type="number" id="f_series_order" min="1" value="'+(b.seriesOrder||'')+'" placeholder="Book # in series">' +
           '</div>' +
           seriesDatalist +
         '</div>' +
