@@ -530,6 +530,11 @@ document.getElementById('overlay').addEventListener('click', (e) => {
 });
 document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return;
+  const moreMenu = document.getElementById('moreMenu');
+  if (moreMenu && moreMenu.style.display !== 'none'){
+    closeMoreMenu();
+    return;
+  }
   const confirmOpen = document.getElementById('confirmOverlay').classList.contains('open');
   if (confirmOpen) closeConfirm();
   else closeOverlay();
@@ -633,6 +638,13 @@ function setupTypeahead(inputId, dropdownId, fetchResults, renderItem, onSelect,
     hideDropdown();
   }
 
+  function showError(){
+    currentResults = [];
+    activeIndex = -1;
+    dropdownEl.innerHTML = '<div class="typeahead-item typeahead-error">Couldn’t reach Open Library — check your connection and try again.</div>';
+    dropdownEl.style.display = 'block';
+  }
+
   function showResults(results){
     currentResults = results || [];
     activeIndex = -1;
@@ -672,35 +684,36 @@ function setupTypeahead(inputId, dropdownId, fetchResults, renderItem, onSelect,
         showResults(results);
       } catch (err) {
         if (seq !== requestSeq) return;
-        hideDropdown();
+        showError();
       }
     }, 350);
   });
 
   inputEl.addEventListener('keydown', (e) => {
-    const isOpen = dropdownEl.style.display !== 'none' && currentResults.length > 0;
+    const isVisible = dropdownEl.style.display !== 'none';
+    const hasResults = isVisible && currentResults.length > 0;
     if (e.key === 'ArrowDown'){
-      if (!isOpen) return;
+      if (!hasResults) return;
       e.preventDefault();
       activeIndex = (activeIndex + 1) % currentResults.length;
       updateActiveHighlight();
       return;
     }
     if (e.key === 'ArrowUp'){
-      if (!isOpen) return;
+      if (!hasResults) return;
       e.preventDefault();
       activeIndex = (activeIndex - 1 + currentResults.length) % currentResults.length;
       updateActiveHighlight();
       return;
     }
     if (e.key === 'Enter'){
-      if (!isOpen || activeIndex < 0) return;
+      if (!hasResults || activeIndex < 0) return;
       e.preventDefault();
       selectIndex(activeIndex);
       return;
     }
     if (e.key === 'Escape'){
-      if (!isOpen) return;
+      if (!isVisible) return;
       hideDropdown();
       e.stopPropagation();
     }
@@ -1237,6 +1250,28 @@ setupTypeahead('f_author', 'f_author_dropdown', fetchAuthorResults, renderAuthor
 }
 
 document.getElementById('openAddBtn').addEventListener('click', openFindBookForm);
+
+function closeMoreMenu(){
+  const menu = document.getElementById('moreMenu');
+  if (menu) menu.style.display = 'none';
+}
+
+document.getElementById('moreMenuBtn').addEventListener('click', (e) => {
+  e.stopPropagation();
+  const menu = document.getElementById('moreMenu');
+  menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
+});
+
+document.getElementById('exportBtn').addEventListener('click', closeMoreMenu);
+document.getElementById('importBtn').addEventListener('click', closeMoreMenu);
+
+document.addEventListener('click', (e) => {
+  const menu = document.getElementById('moreMenu');
+  const btn = document.getElementById('moreMenuBtn');
+  if (menu.style.display === 'none') return;
+  if (menu.contains(e.target) || btn.contains(e.target)) return;
+  closeMoreMenu();
+});
 
 function updateAddButtonLabel(){
   document.getElementById('openAddBtn').textContent = '+ Add a book';
