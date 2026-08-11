@@ -2,6 +2,8 @@ let books = [];
 let currentFilter = { search: '', genre: '', sort: 'authorLast' };
 let currentLibrary = 'completed';
 let editingId = null;
+let viewMode = 'shelf';
+let summaryState = { funFactText: null, shelfPicks: {} };
 
 const STATUS_META = {
   tbr: {
@@ -324,8 +326,21 @@ function packRows(list, availWidth){
   return rows;
 }
 
+function toggleSummaryChrome(){
+  const isSummary = viewMode === 'summary';
+  const statsEl = document.getElementById('headerStats');
+  const filtersEl = document.getElementById('toolbarFilters');
+  if (statsEl) statsEl.style.display = isSummary ? 'none' : '';
+  if (filtersEl) filtersEl.style.display = isSummary ? 'none' : '';
+}
+
 function render(){
   updateStats();
+  toggleSummaryChrome();
+  if (viewMode === 'summary'){
+    renderSummary();
+    return;
+  }
   updateGenreFilter();
   const container = document.getElementById('shelfContainer');
   const list = getFilteredSorted();
@@ -373,6 +388,182 @@ function render(){
   container.querySelectorAll('.spine').forEach(el => {
     el.addEventListener('click', () => openDetail(parseInt(el.dataset.id)));
   });
+}
+
+function pickRandom(arr, n){
+  const copy = arr.slice();
+  for (let i = copy.length - 1; i > 0; i--){
+    const j = Math.floor(Math.random() * (i + 1));
+    const tmp = copy[i]; copy[i] = copy[j]; copy[j] = tmp;
+  }
+  return copy.slice(0, n);
+}
+
+function computeCompletedStats(){
+  const completedBooks = books.filter(b => b.status === 'completed');
+  const totalBooks = completedBooks.length;
+  const totalPages = completedBooks.reduce((sum, b) => sum + (b.pages || 0), 0);
+  const avgPages = totalBooks ? Math.round(totalPages / totalBooks) : 0;
+
+  const genreCounts = {};
+  completedBooks.forEach(b => {
+    const g = (b.genre || '').trim();
+    if (g) genreCounts[g] = (genreCounts[g] || 0) + 1;
+  });
+  const topGenres = Object.entries(genreCounts)
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
+    .slice(0, 5);
+
+  const authorCounts = {};
+  completedBooks.forEach(b => {
+    const a = (b.author || '').trim();
+    if (a) authorCounts[a] = (authorCounts[a] || 0) + 1;
+  });
+  const topAuthors = Object.entries(authorCounts)
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
+    .slice(0, 5);
+
+  return {
+    totalBooks, totalPages, avgPages,
+    genreCount: Object.keys(genreCounts).length,
+    authorCount: Object.keys(authorCounts).length,
+    topGenres, topAuthors,
+    topGenre: topGenres[0] || null,
+    topAuthor: topAuthors[0] || null
+  };
+}
+
+const EMPTY_FUN_FACT = 'Your reading story starts with one book — add your first finished read!';
+const FUN_FACT_TEMPLATES = [
+  (s) => `You've finished ${s.totalBooks} book${s.totalBooks === 1 ? '' : 's'} — that's ${s.totalPages.toLocaleString()} pages turned!`,
+  (s) => s.avgPages ? `On average, you read ${s.avgPages} pages per book.` : null,
+  (s) => s.topGenre ? `Your most-read genre is ${s.topGenre.name}, with ${s.topGenre.count} book${s.topGenre.count === 1 ? '' : 's'}.` : null,
+  (s) => s.topAuthor ? `You've read ${s.topAuthor.name} the most — ${s.topAuthor.count} book${s.topAuthor.count === 1 ? '' : 's'} so far.` : null,
+  (s) => s.genreCount ? `You've explored ${s.genreCount} different genre${s.genreCount === 1 ? '' : 's'}.` : null,
+  (s) => s.authorCount ? `${s.authorCount} different author${s.authorCount === 1 ? '' : 's'} have kept you company on the page.` : null
+];
+
+function pickFunFact(stats){
+  if (stats.totalBooks === 0) return EMPTY_FUN_FACT;
+  const applicable = FUN_FACT_TEMPLATES.map(fn => fn(stats)).filter(Boolean);
+  if (!applicable.length) return EMPTY_FUN_FACT;
+  return applicable[Math.floor(Math.random() * applicable.length)];
+}
+
+function buildBreakdownChips(list){
+  return list.map(item => '<span class="summary-chip">'+escapeHtml(item.name)+'<b>'+item.count+'</b></span>').join('');
+}
+
+function summaryStatCardHtml(value, label, breakdownList){
+  const hasBreakdown = breakdownList && breakdownList.length;
+  const chips = hasBreakdown ? buildBreakdownChips(breakdownList) : '';
+  const breakdownHtml = hasBreakdown ?
+    '<div class="summary-breakdown-inline">'+chips+'</div>' +
+    '<div class="summary-breakdown-trigger-wrap">' +
+      '<button type="button" class="summary-breakdown-trigger">Top 5 ▾</button>' +
+      '<div class="summary-breakdown-popover">'+chips+'</div>' +
+    '</div>'
+    : '';
+  return '<div class="summary-stat-card"><span class="summary-stat-n">'+value+'</span><span class="summary-stat-l">'+label+'</span>'+breakdownHtml+'</div>';
+}
+
+function setupBreakdownToggles(container){
+  container.querySelectorAll('.summary-breakdown-trigger-wrap').forEach(wrap => {
+    const trigger = wrap.querySelector('.summary-breakdown-trigger');
+    if (!trigger) return;
+    trigger.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const isOpen = wrap.classList.contains('open');
+      container.querySelectorAll('.summary-breakdown-trigger-wrap.open').forEach(w => w.classList.remove('open'));
+      if (!isOpen) wrap.classList.add('open');
+    });
+  });
+}
+
+function closeBreakdownPopovers(){
+  document.querySelectorAll('.summary-breakdown-trigger-wrap.open').forEach(w => w.classList.remove('open'));
+}
+
+function renderSummary(){
+  const container = document.getElementById('shelfContainer');
+  const stats = computeCompletedStats();
+  if (!summaryState.funFactText) summaryState.funFactText = pickFunFact(stats);
+
+  let html = '<div class="summary-view">';
+  html += '<div class="summary-fact-banner">📖 '+escapeHtml(summaryState.funFactText)+'</div>';
+  html += '<div class="summary-stats-grid">';
+  html += summaryStatCardHtml(stats.totalBooks, 'Books Read', null);
+  html += summaryStatCardHtml(stats.totalPages.toLocaleString(), 'Pages Read', null);
+  html += summaryStatCardHtml(stats.genreCount, 'Genres Explored', stats.topGenres);
+  html += summaryStatCardHtml(stats.authorCount, 'Authors Read', stats.topAuthors);
+  html += '</div>';
+
+  html += '<div class="summary-shelf-grid">';
+  Object.keys(STATUS_META).forEach(status => {
+    const shelfBooks = books.filter(b => b.status === status);
+    html +=
+      '<div class="summary-shelf-card">' +
+        '<div class="summary-shelf-card-header">' +
+          '<span class="summary-shelf-card-title">'+STATUS_META[status].pillLabel+'</span>' +
+          '<span class="summary-shelf-card-count">'+shelfBooks.length+'</span>' +
+        '</div>' +
+        '<div class="summary-shelf-spines" id="summarySpines_'+status+'">' +
+          (shelfBooks.length ? '' : '<div class="summary-empty">No books here yet</div>') +
+        '</div>' +
+        '<span class="summary-see-shelf" data-status="'+status+'">See shelf →</span>' +
+      '</div>';
+  });
+  html += '</div>';
+  html += '</div>';
+
+  container.innerHTML = html;
+
+  Object.keys(STATUS_META).forEach(status => {
+    const spinesEl = document.getElementById('summarySpines_' + status);
+    const shelfBooks = books.filter(b => b.status === status);
+    if (!spinesEl || !shelfBooks.length) return;
+
+    const wantCount = Math.min(5, shelfBooks.length);
+    let ids = summaryState.shelfPicks[status] || [];
+    let picked = ids.map(id => shelfBooks.find(b => b.id === id)).filter(Boolean);
+    if (picked.length < wantCount){
+      const usedIds = new Set(picked.map(b => b.id));
+      const remaining = shelfBooks.filter(b => !usedIds.has(b.id));
+      picked = picked.concat(pickRandom(remaining, wantCount - picked.length));
+    }
+    summaryState.shelfPicks[status] = picked.map(b => b.id);
+
+    const availWidth = Math.max(150, spinesEl.clientWidth);
+    const rows = packRows(picked, availWidth);
+    let spineHtml = '';
+    rows.forEach(row => {
+      spineHtml += '<div class="shelf-row"><div class="spines">';
+      row.forEach(b => {
+        const color = colorForBook(b);
+        const w = widthForBook(b);
+        const h = heightForBook(b);
+        spineHtml += '<div class="spine" data-id="'+b.id+'" style="background:'+color+';width:'+w+'px;height:'+h+'px;" title="'+escapeHtml(b.title)+'">' +
+          '<span class="rule top"></span>' +
+          '<span class="title">'+escapeHtml(b.title)+'</span>' +
+          '<span class="author">'+escapeHtml(authorLastName(b.author))+'</span>' +
+          '<span class="rule bottom"></span>' +
+          '</div>';
+      });
+      spineHtml += '</div><div class="plank"></div></div>';
+    });
+    spinesEl.innerHTML = spineHtml;
+    spinesEl.querySelectorAll('.spine').forEach(el => {
+      el.addEventListener('click', () => openDetail(parseInt(el.dataset.id)));
+    });
+  });
+
+  container.querySelectorAll('.summary-see-shelf').forEach(el => {
+    el.addEventListener('click', () => switchLibrary(el.dataset.status));
+  });
+
+  setupBreakdownToggles(container);
 }
 
 function openDetail(id){
@@ -533,6 +724,11 @@ document.addEventListener('keydown', (e) => {
   const moreMenu = document.getElementById('moreMenu');
   if (moreMenu && moreMenu.style.display !== 'none'){
     closeMoreMenu();
+    return;
+  }
+  const openBreakdown = document.querySelector('.summary-breakdown-trigger-wrap.open');
+  if (openBreakdown){
+    closeBreakdownPopovers();
     return;
   }
   const confirmOpen = document.getElementById('confirmOverlay').classList.contains('open');
@@ -1287,12 +1483,27 @@ document.addEventListener('click', (e) => {
   closeMoreMenu();
 });
 
+document.addEventListener('click', (e) => {
+  document.querySelectorAll('.summary-breakdown-trigger-wrap.open').forEach(wrap => {
+    if (!wrap.contains(e.target)) wrap.classList.remove('open');
+  });
+});
+
 function updateAddButtonLabel(){
   document.getElementById('openAddBtn').textContent = '+ Add a book';
 }
 
 function switchLibrary(status){
-  if (status === currentLibrary) return;
+  if (status === 'summary'){
+    if (viewMode === 'summary') return;
+    viewMode = 'summary';
+    summaryState = { funFactText: null, shelfPicks: {} };
+    document.querySelectorAll('.lib-pill').forEach(p => p.classList.toggle('active', p.dataset.status === 'summary'));
+    render();
+    return;
+  }
+  if (status === currentLibrary && viewMode === 'shelf') return;
+  viewMode = 'shelf';
   currentLibrary = status;
   document.querySelectorAll('.lib-pill').forEach(p => p.classList.toggle('active', p.dataset.status === status));
   updateAddButtonLabel();

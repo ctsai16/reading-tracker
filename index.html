@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Reading Library — reading tracker</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -15,7 +16,7 @@
       <h1>Reading Library</h1>
       <p>Your reading life, shelf by shelf.</p>
     </div>
-    <div class="stats">
+    <div class="stats" id="headerStats">
       <div class="stat"><span class="n" id="statCount">0</span><span class="l" id="statCountLabel">Finished</span></div>
       <div class="stat" id="statAvgWrap"><span class="n" id="statAvg">—</span><span class="l" id="statAvgLabel">Avg rating</span></div>
       <div class="stat"><span class="n" id="statGenres">0</span><span class="l">Genres</span></div>
@@ -23,6 +24,7 @@
   </header>
 
   <div class="library-toggle" id="libraryToggle">
+    <button class="lib-pill" data-status="summary">Summary</button>
     <button class="lib-pill" data-status="tbr">TBR <span class="lib-count" data-count-for="tbr">0</span></button>
     <button class="lib-pill" data-status="reading">Reading <span class="lib-count" data-count-for="reading">0</span></button>
     <button class="lib-pill active" data-status="completed">Completed <span class="lib-count" data-count-for="completed">0</span></button>
@@ -30,7 +32,7 @@
   </div>
 
   <div class="toolbar">
-    <div class="filters">
+    <div class="filters" id="toolbarFilters">
       <input type="text" id="searchInput" placeholder="Search title or author" style="min-width:200px;">
       <select id="genreFilter"><option value="">All Genres</option></select>
       <select id="sortSelect">
