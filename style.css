@@ -74,6 +74,14 @@ header p{
 .stat .n{font-family:'Fredoka', sans-serif;font-weight:600;font-size:26px;color:var(--coral);display:block;line-height:1.1;}
 .stat .l{font-size:11px;letter-spacing:0.8px;text-transform:uppercase;color:var(--ink-soft);font-weight:600;}
 
+.toggle-row{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:16px;
+  flex-wrap:wrap;
+  margin-bottom:26px;
+}
 .library-toggle{
   display:flex;
   flex-wrap:wrap;
@@ -83,8 +91,13 @@ header p{
   border-radius:24px;
   padding:5px;
   width:fit-content;
-  margin-bottom:26px;
 }
+.shelves-dropdown-wrap{position:relative;}
+.lib-shelf-item{position:relative;}
+.lib-shelf-item .lib-count{background:#FFEAD1;color:var(--ink-soft);}
+.lib-shelf-item.active{background:var(--coral);color:#fff;}
+.lib-shelf-item.active .lib-count{background:rgba(255,255,255,0.3);color:#fff;}
+.lib-shelf-item.active:hover{background:var(--coral);}
 .lib-pill{
   font-family:'Fredoka', sans-serif;
   font-weight:600;
