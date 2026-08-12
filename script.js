@@ -688,7 +688,7 @@ async function retryReading(id){
   await saveBooks();
   if (currentLibrary !== 'reading'){
     currentLibrary = 'reading';
-    document.querySelectorAll('.lib-pill').forEach(p => p.classList.toggle('active', p.dataset.status === currentLibrary));
+    updateToggleActiveStates();
     updateAddButtonLabel();
   }
   render();
@@ -705,7 +705,7 @@ async function rereadBook(id){
   await saveBooks();
   if (currentLibrary !== 'reading'){
     currentLibrary = 'reading';
-    document.querySelectorAll('.lib-pill').forEach(p => p.classList.toggle('active', p.dataset.status === currentLibrary));
+    updateToggleActiveStates();
     updateAddButtonLabel();
   }
   render();
@@ -724,6 +724,11 @@ document.addEventListener('keydown', (e) => {
   const moreMenu = document.getElementById('moreMenu');
   if (moreMenu && moreMenu.style.display !== 'none'){
     closeMoreMenu();
+    return;
+  }
+  const shelvesMenu = document.getElementById('shelvesMenu');
+  if (shelvesMenu && shelvesMenu.style.display !== 'none'){
+    closeShelvesMenu();
     return;
   }
   const openBreakdown = document.querySelector('.summary-breakdown-trigger-wrap.open');
@@ -1048,8 +1053,8 @@ function renderForm(existing, forceStatus, prefill){
   const overlay = document.getElementById('overlay');
   const spread = document.getElementById('bookSpread');
   const b = existing || Object.assign({ title:'', author:'', genre:'', rating:0, spice:null, review:'', dateFinished:'', color:'', series:null, seriesOrder:null, ownsHardCopy:false, pages:null, publisher:'', publishYear:null, format:null }, prefill || {});
-  const formStatus = forceStatus || (existing ? (existing.status || 'completed') : currentLibrary);
-  let addShelf = formStatus;
+  const formStatus = forceStatus || (existing ? (existing.status || 'completed') : 'tbr');
+  const addShelf = formStatus;
   const justMoved = !!forceStatus && existing && existing.status !== forceStatus;
   const isMinimalTransition = justMoved && (formStatus === 'dnf' || (formStatus === 'completed' && existing.status !== 'reading'));
   const isMediumTransition = justMoved && formStatus === 'completed' && existing.status === 'reading';
@@ -1165,9 +1170,6 @@ function renderForm(existing, forceStatus, prefill){
     '<div class="page left" style="grid-column:1 / -1;">' +
       '<h2 class="book-title">Add a book</h2>' +
       '<div class="form-grid">' +
-        '<div><label>Add to shelf</label><div class="format-picker" id="f_shelf">' +
-          Object.keys(STATUS_META).map(k => '<button type="button" class="format-option'+(k===addShelf?' on':'')+'" data-shelf="'+k+'">'+STATUS_META[k].pillLabel+'</button>').join('') +
-        '</div></div>' +
         '<div class="typeahead-wrap"><label>Title</label><input type="text" id="f_title" value="'+escapeHtml(b.title)+'" placeholder="a book title" autocomplete="off"><div class="typeahead-dropdown" id="f_title_dropdown" style="display:none;"></div></div>' +
         '<div class="two-col">' +
           '<div class="typeahead-wrap"><label>Author</label><input type="text" id="f_author" value="'+escapeHtml(b.author)+'" placeholder="Author name" autocomplete="off"><div class="typeahead-dropdown" id="f_author_dropdown" style="display:none;"></div></div>' +
@@ -1176,19 +1178,13 @@ function renderForm(existing, forceStatus, prefill){
             genreOptions.map(g => '<option value="'+g+'"'+(b.genre===g?' selected':'')+'>'+g+'</option>').join('') +
           '</select></div>' +
         '</div>' +
-        '<div id="f_ratingdate_wrap">' +
-          '<div id="f_rating_wrap"><label>Your rating <span style="text-transform:none;font-weight:600;color:var(--ink-soft);">(tap left/right half of a star for half ratings)</span></label><div class="star-picker" id="f_stars"></div><span id="f_stars_readout" style="font-size:12px;color:var(--ink-soft);font-weight:600;display:block;margin-top:4px;"></span></div>' +
-          '<div id="f_date_wrap"><label id="f_date_label">'+meta.dateLabel+'</label><input type="date" id="f_date" value=""></div>' +
-        '</div>' +
+        ratingDateFields +
         '<div class="two-col">' +
           '<div><label>Page count <span style="text-transform:none;font-weight:600;color:var(--ink-soft);">(sets spine thickness)</span></label><input type="text" inputmode="numeric" id="f_pages" value="'+(b.pages||'')+'" placeholder="e.g. 320"></div>' +
           '<div><label>Publish year</label><input type="text" inputmode="numeric" id="f_publish_year" value="'+(b.publishYear||'')+'" placeholder="e.g. 2011"></div>' +
         '</div>' +
         '<div><label>Publisher</label><input type="text" id="f_publisher" value="'+escapeHtml(b.publisher||'')+'" placeholder="e.g. Tor Books"></div>' +
-        '<div id="f_spice_wrap">' +
-          '<label>Spice level <span class="spice-none-toggle" id="f_spice_toggle">set a level</span></label>' +
-          '<div class="spice-picker" id="f_spice" style="display:none;"></div>' +
-        '</div>' +
+        spiceField +
         '<div>' +
           '<label>Series <span class="spice-none-toggle" id="f_series_toggle">'+(b.series?'remove from series':'part of a series?')+'</span></label>' +
           '<div class="two-col" id="f_series_fields" style="'+(b.series?'':'display:none;')+'">' +
@@ -1280,54 +1276,6 @@ function renderForm(existing, forceStatus, prefill){
     }
   };
 
-  const shelfWrapEl = document.getElementById('f_shelf');
-  if (shelfWrapEl){
-    const applyShelfMeta = (key) => {
-      const m = STATUS_META[key];
-      const rdWrapEl = document.getElementById('f_ratingdate_wrap');
-      const ratingWrapEl = document.getElementById('f_rating_wrap');
-      const dateWrapEl = document.getElementById('f_date_wrap');
-      const spiceWrapOuter = document.getElementById('f_spice_wrap');
-      const submitBtnEl = document.getElementById('f_submit');
-      if (rdWrapEl){
-        if (!m.showRating && !m.showDate){
-          rdWrapEl.style.display = 'none';
-        } else {
-          rdWrapEl.className = (m.showRating && m.showDate) ? 'two-col' : '';
-          rdWrapEl.style.display = (m.showRating && m.showDate) ? 'grid' : 'block';
-        }
-      }
-      if (ratingWrapEl){
-        ratingWrapEl.style.display = m.showRating ? '' : 'none';
-        if (!m.showRating){ rating = 0; drawStars(); }
-      }
-      if (dateWrapEl){
-        dateWrapEl.style.display = m.showDate ? '' : 'none';
-        const dateLabelEl = document.getElementById('f_date_label');
-        if (dateLabelEl) dateLabelEl.textContent = m.dateLabel;
-        if (!m.showDate){ const dEl = document.getElementById('f_date'); if (dEl) dEl.value = ''; }
-      }
-      if (spiceWrapOuter){
-        spiceWrapOuter.style.display = m.showSpice ? '' : 'none';
-        if (!m.showSpice){
-          spiceVal = null;
-          if (spiceWrap) spiceWrap.style.display = 'none';
-          const spiceToggle2 = document.getElementById('f_spice_toggle');
-          if (spiceToggle2) spiceToggle2.textContent = 'set a level';
-        }
-      }
-      if (submitBtnEl) submitBtnEl.textContent = m.submitLabelNew;
-    };
-    shelfWrapEl.querySelectorAll('.format-option').forEach(btn => {
-      btn.onclick = () => {
-        addShelf = btn.dataset.shelf;
-        shelfWrapEl.querySelectorAll('.format-option').forEach(x => x.classList.remove('on'));
-        btn.classList.add('on');
-        applyShelfMeta(addShelf);
-      };
-    });
-    applyShelfMeta(addShelf);
-  }
 
 setupTypeahead('f_title', 'f_title_dropdown', fetchTitleResults, renderTitleItem, selectTitleResult);
 setupTypeahead('f_author', 'f_author_dropdown', fetchAuthorResults, renderAuthorItem, selectAuthorResult);
@@ -1451,7 +1399,7 @@ setupTypeahead('f_author', 'f_author_dropdown', fetchAuthorResults, renderAuthor
     await saveBooks();
     if (bookData.status !== currentLibrary){
       currentLibrary = bookData.status;
-      document.querySelectorAll('.lib-pill').forEach(p => p.classList.toggle('active', p.dataset.status === currentLibrary));
+      updateToggleActiveStates();
       updateAddButtonLabel();
     }
     render();
@@ -1493,19 +1441,31 @@ function updateAddButtonLabel(){
   document.getElementById('openAddBtn').textContent = '+ Add a book';
 }
 
+function updateToggleActiveStates(){
+  document.querySelectorAll('.lib-pill[data-status="summary"]').forEach(p => p.classList.toggle('active', viewMode === 'summary'));
+  const shelvesBtn = document.getElementById('shelvesToggleBtn');
+  if (shelvesBtn){
+    shelvesBtn.classList.toggle('active', viewMode === 'shelf');
+    shelvesBtn.textContent = STATUS_META[currentLibrary].pillLabel + ' ▾';
+  }
+  document.querySelectorAll('.lib-shelf-item').forEach(item => {
+    item.classList.toggle('active', viewMode === 'shelf' && item.dataset.status === currentLibrary);
+  });
+}
+
 function switchLibrary(status){
   if (status === 'summary'){
     if (viewMode === 'summary') return;
     viewMode = 'summary';
     summaryState = { funFactText: null, shelfPicks: {} };
-    document.querySelectorAll('.lib-pill').forEach(p => p.classList.toggle('active', p.dataset.status === 'summary'));
+    updateToggleActiveStates();
     render();
     return;
   }
   if (status === currentLibrary && viewMode === 'shelf') return;
   viewMode = 'shelf';
   currentLibrary = status;
-  document.querySelectorAll('.lib-pill').forEach(p => p.classList.toggle('active', p.dataset.status === status));
+  updateToggleActiveStates();
   updateAddButtonLabel();
   currentFilter.search = '';
   currentFilter.genre = '';
@@ -1513,8 +1473,34 @@ function switchLibrary(status){
   render();
 }
 
-document.querySelectorAll('.lib-pill').forEach(p => {
+document.querySelectorAll('.lib-pill[data-status]').forEach(p => {
   p.addEventListener('click', () => switchLibrary(p.dataset.status));
+});
+
+function closeShelvesMenu(){
+  const menu = document.getElementById('shelvesMenu');
+  if (menu) menu.style.display = 'none';
+}
+
+document.getElementById('shelvesToggleBtn').addEventListener('click', (e) => {
+  e.stopPropagation();
+  const menu = document.getElementById('shelvesMenu');
+  menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
+});
+
+document.querySelectorAll('.lib-shelf-item').forEach(item => {
+  item.addEventListener('click', () => {
+    switchLibrary(item.dataset.status);
+    closeShelvesMenu();
+  });
+});
+
+document.addEventListener('click', (e) => {
+  const menu = document.getElementById('shelvesMenu');
+  const btn = document.getElementById('shelvesToggleBtn');
+  if (menu.style.display === 'none') return;
+  if (menu.contains(e.target) || btn.contains(e.target)) return;
+  closeShelvesMenu();
 });
 
 updateAddButtonLabel();
