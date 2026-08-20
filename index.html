@@ -16,7 +16,7 @@
       <h1>Reading Library</h1>
       <p>Your reading life, shelf by shelf.</p>
     </div>
-    <div class="stats" id="headerStats">
+    <div class="stats" id="headerStats" style="display:none;">
       <div class="stat"><span class="n" id="statCount">0</span><span class="l" id="statCountLabel">Finished</span></div>
       <div class="stat" id="statAvgWrap"><span class="n" id="statAvg">—</span><span class="l" id="statAvgLabel">Avg rating</span></div>
       <div class="stat"><span class="n" id="statGenres">0</span><span class="l">Genres</span></div>
@@ -25,9 +25,9 @@
 
   <div class="toggle-row">
     <div class="library-toggle" id="libraryToggle">
-      <button class="lib-pill" data-status="summary">Summary</button>
+      <button class="lib-pill active" data-status="summary">Summary</button>
       <div class="shelves-dropdown-wrap">
-        <button class="lib-pill active" id="shelvesToggleBtn" aria-haspopup="true">Completed ▾</button>
+        <button class="lib-pill" id="shelvesToggleBtn" aria-haspopup="true">Completed ▾</button>
         <div class="dropdown-menu" id="shelvesMenu" style="display:none;">
           <button class="dropdown-item lib-shelf-item" data-status="tbr">TBR <span class="lib-count" data-count-for="tbr">0</span></button>
           <button class="dropdown-item lib-shelf-item" data-status="reading">Reading <span class="lib-count" data-count-for="reading">0</span></button>
@@ -52,7 +52,7 @@
   </div>
 
   <div class="toolbar">
-    <div class="filters" id="toolbarFilters">
+    <div class="filters" id="toolbarFilters" style="display:none;">
       <input type="text" id="searchInput" placeholder="Search title or author" style="min-width:200px;">
       <select id="genreFilter"><option value="">All Genres</option></select>
       <select id="sortSelect">
