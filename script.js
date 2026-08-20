@@ -2,7 +2,7 @@ let books = [];
 let currentFilter = { search: '', genre: '', sort: 'authorLast' };
 let currentLibrary = 'completed';
 let editingId = null;
-let viewMode = 'shelf';
+let viewMode = 'summary';
 let summaryState = { funFactText: null, shelfPicks: {} };
 
 const STATUS_META = {
