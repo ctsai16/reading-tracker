@@ -492,13 +492,13 @@ function renderSummary(){
   if (!summaryState.funFactText) summaryState.funFactText = pickFunFact(stats);
 
   let html = '<div class="summary-view">';
-  html += '<div class="summary-fact-banner">📖 '+escapeHtml(summaryState.funFactText)+'</div>';
   html += '<div class="summary-stats-grid">';
   html += summaryStatCardHtml(stats.totalBooks, 'Books Read', null);
   html += summaryStatCardHtml(stats.totalPages.toLocaleString(), 'Pages Read', null);
   html += summaryStatCardHtml(stats.genreCount, 'Genres Explored', stats.topGenres);
   html += summaryStatCardHtml(stats.authorCount, 'Authors Read', stats.topAuthors);
   html += '</div>';
+  html += '<div class="summary-fact-banner">📖 '+escapeHtml(summaryState.funFactText)+'</div>';
 
   html += '<div class="summary-shelf-grid">';
   Object.keys(STATUS_META).forEach(status => {
