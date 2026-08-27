@@ -1052,7 +1052,7 @@ function openFindBookForm(){
 function renderForm(existing, forceStatus, prefill){
   const overlay = document.getElementById('overlay');
   const spread = document.getElementById('bookSpread');
-  const b = existing || Object.assign({ title:'', author:'', genre:'', rating:0, spice:null, review:'', dateFinished:'', color:'', series:null, seriesOrder:null, ownsHardCopy:false, pages:null, publisher:'', publishYear:null, format:null }, prefill || {});
+  const b = existing || Object.assign({ title:'', author:'', genre:'', rating:0, spice:null, review:'', dateFinished:'', color:'', series:null, seriesOrder:null, ownsHardCopy:false, pages:null, publisher:'', publishYear:null, format:null, runtimeMinutes:null }, prefill || {});
   const formStatus = forceStatus || (existing ? (existing.status || 'completed') : 'tbr');
   const addShelf = formStatus;
   const justMoved = !!forceStatus && existing && existing.status !== forceStatus;
@@ -1066,6 +1066,14 @@ function renderForm(existing, forceStatus, prefill){
 
   const genreOptions = ['Fiction','Fantasy','Sci-Fi','Romance','Mystery/Thriller','Nonfiction','Memoir','Historical Fiction','Horror','Young Adult','Poetry','Classic','Other'];
   const seriesDatalist = '<datalist id="seriesList">' + allSeriesNames().map(s => '<option value="'+escapeHtml(s)+'">').join('') + '</datalist>';
+  const initialRuntimeHours = b.runtimeMinutes ? Math.floor(b.runtimeMinutes / 60) : '';
+  const initialRuntimeMinutes = b.runtimeMinutes ? (b.runtimeMinutes % 60) : '';
+  const pagesRuntimeFields =
+    '<div class="two-col">' +
+      '<div id="f_pages_cell" style="'+(b.format==='audiobook'?'display:none;':'')+'"><label>Page count <span style="text-transform:none;font-weight:600;color:var(--ink-soft);">(sets spine thickness)</span></label><input type="text" inputmode="numeric" id="f_pages" value="'+(b.pages||'')+'" placeholder="e.g. 320"></div>' +
+      '<div id="f_runtime_cell" style="'+(b.format==='audiobook'?'':'display:none;')+'"><label>Runtime</label><div style="display:flex;gap:8px;align-items:center;"><input type="text" inputmode="numeric" id="f_runtime_hours" value="'+initialRuntimeHours+'" placeholder="hrs" style="width:64px;"><span style="color:var(--ink-soft);font-weight:600;font-size:13px;">h</span><input type="text" inputmode="numeric" id="f_runtime_minutes" value="'+initialRuntimeMinutes+'" placeholder="min" style="width:64px;"><span style="color:var(--ink-soft);font-weight:600;font-size:13px;">m</span></div></div>' +
+      '<div><label>Publish year</label><input type="text" inputmode="numeric" id="f_publish_year" value="'+(b.publishYear||'')+'" placeholder="e.g. 2011"></div>' +
+    '</div>';
 
   spread.classList.add('no-spine');
   const formTitle = justMoved ? TRANSITION_HEADINGS[formStatus] : (existing ? 'Edit book' : meta.formTitleNew);
@@ -1131,6 +1139,7 @@ function renderForm(existing, forceStatus, prefill){
     '<div class="page left" style="grid-column:1 / -1;">' +
       '<h2 class="book-title">'+formTitle+'</h2>' +
       '<div class="form-grid">' +
+        '<div><label>Format</label><div class="format-picker" id="f_format"></div></div>' +
         '<div class="typeahead-wrap"><label>Title</label><input type="text" id="f_title" value="'+escapeHtml(b.title)+'" placeholder="a book title" autocomplete="off"><div class="typeahead-dropdown" id="f_title_dropdown" style="display:none;"></div></div>' +
         '<div class="two-col">' +
           '<div class="typeahead-wrap"><label>Author</label><input type="text" id="f_author" value="'+escapeHtml(b.author)+'" placeholder="Author name" autocomplete="off"><div class="typeahead-dropdown" id="f_author_dropdown" style="display:none;"></div></div>' +
@@ -1140,10 +1149,7 @@ function renderForm(existing, forceStatus, prefill){
           '</select></div>' +
         '</div>' +
         ratingDateFields +
-        '<div class="two-col">' +
-          '<div><label>Page count <span style="text-transform:none;font-weight:600;color:var(--ink-soft);">(sets spine thickness)</span></label><input type="text" inputmode="numeric" id="f_pages" value="'+(b.pages||'')+'" placeholder="e.g. 320"></div>' +
-          '<div><label>Publish year</label><input type="text" inputmode="numeric" id="f_publish_year" value="'+(b.publishYear||'')+'" placeholder="e.g. 2011"></div>' +
-        '</div>' +
+        pagesRuntimeFields +
         '<div><label>Publisher</label><input type="text" id="f_publisher" value="'+escapeHtml(b.publisher||'')+'" placeholder="e.g. Tor Books"></div>' +
         spiceField +
         '<div>' +
@@ -1155,7 +1161,6 @@ function renderForm(existing, forceStatus, prefill){
           seriesDatalist +
         '</div>' +
         '<div><label>Spine color</label><div class="color-picker" id="f_colors"></div></div>' +
-        '<div><label>Format</label><div class="format-picker" id="f_format"></div></div>' +
         '<div style="display:flex;align-items:center;gap:8px;">' +
           '<input type="checkbox" id="f_hardcopy" style="width:20px;height:20px;accent-color:var(--coral);" '+(b.ownsHardCopy?'checked':'')+'>' +
           '<label for="f_hardcopy" style="margin:0;text-transform:none;font-size:14px;color:var(--ink);">I own a hard copy of this book</label>' +
@@ -1170,6 +1175,7 @@ function renderForm(existing, forceStatus, prefill){
     '<div class="page left" style="grid-column:1 / -1;">' +
       '<h2 class="book-title">Add a book</h2>' +
       '<div class="form-grid">' +
+        '<div><label>Format</label><div class="format-picker" id="f_format"></div></div>' +
         '<div class="typeahead-wrap"><label>Title</label><input type="text" id="f_title" value="'+escapeHtml(b.title)+'" placeholder="a book title" autocomplete="off"><div class="typeahead-dropdown" id="f_title_dropdown" style="display:none;"></div></div>' +
         '<div class="two-col">' +
           '<div class="typeahead-wrap"><label>Author</label><input type="text" id="f_author" value="'+escapeHtml(b.author)+'" placeholder="Author name" autocomplete="off"><div class="typeahead-dropdown" id="f_author_dropdown" style="display:none;"></div></div>' +
@@ -1179,10 +1185,7 @@ function renderForm(existing, forceStatus, prefill){
           '</select></div>' +
         '</div>' +
         ratingDateFields +
-        '<div class="two-col">' +
-          '<div><label>Page count <span style="text-transform:none;font-weight:600;color:var(--ink-soft);">(sets spine thickness)</span></label><input type="text" inputmode="numeric" id="f_pages" value="'+(b.pages||'')+'" placeholder="e.g. 320"></div>' +
-          '<div><label>Publish year</label><input type="text" inputmode="numeric" id="f_publish_year" value="'+(b.publishYear||'')+'" placeholder="e.g. 2011"></div>' +
-        '</div>' +
+        pagesRuntimeFields +
         '<div><label>Publisher</label><input type="text" id="f_publisher" value="'+escapeHtml(b.publisher||'')+'" placeholder="e.g. Tor Books"></div>' +
         spiceField +
         '<div>' +
@@ -1194,7 +1197,6 @@ function renderForm(existing, forceStatus, prefill){
           seriesDatalist +
         '</div>' +
         '<div><label>Spine color</label><div class="color-picker" id="f_colors"></div></div>' +
-        '<div><label>Format</label><div class="format-picker" id="f_format"></div></div>' +
         '<div style="display:flex;align-items:center;gap:8px;">' +
           '<input type="checkbox" id="f_hardcopy" style="width:20px;height:20px;accent-color:var(--coral);">' +
           '<label for="f_hardcopy" style="margin:0;text-transform:none;font-size:14px;color:var(--ink);">I own a hard copy of this book</label>' +
@@ -1304,6 +1306,13 @@ setupTypeahead('f_author', 'f_author_dropdown', fetchAuthorResults, renderAuthor
     { key: 'ebook', label: '📱 Ebook' },
     { key: 'audiobook', label: '🎧 Audiobook' }
   ];
+  function updateFormatDependentFields(){
+    const pagesCell = document.getElementById('f_pages_cell');
+    const runtimeCell = document.getElementById('f_runtime_cell');
+    const isAudiobook = formatVal === 'audiobook';
+    if (pagesCell) pagesCell.style.display = isAudiobook ? 'none' : '';
+    if (runtimeCell) runtimeCell.style.display = isAudiobook ? '' : 'none';
+  }
   if (formatWrap){
     FORMAT_OPTIONS.forEach(o => {
       const btn = document.createElement('button');
@@ -1314,10 +1323,12 @@ setupTypeahead('f_author', 'f_author_dropdown', fetchAuthorResults, renderAuthor
         formatVal = (formatVal === o.key) ? '' : o.key;
         formatWrap.querySelectorAll('.format-option').forEach(x => x.classList.remove('on'));
         if (formatVal) btn.classList.add('on');
+        updateFormatDependentFields();
       };
       formatWrap.appendChild(btn);
     });
   }
+  updateFormatDependentFields();
 
   overlay.classList.add('open');
   document.getElementById('closeBtn').onclick = closeOverlay;
@@ -1333,6 +1344,11 @@ setupTypeahead('f_author', 'f_author_dropdown', fetchAuthorResults, renderAuthor
     const dateFinished = dateFinishedEl ? dateFinishedEl.value : ((isMinimalTransition || isMediumTransition) ? new Date().toISOString().slice(0, 10) : (b.dateFinished || ''));
     const pagesEl = document.getElementById('f_pages');
     const pagesRaw = pagesEl ? pagesEl.value.trim() : (b.pages ? String(b.pages) : '');
+    const runtimeHoursEl = document.getElementById('f_runtime_hours');
+    const runtimeMinutesEl = document.getElementById('f_runtime_minutes');
+    const runtimeHours = runtimeHoursEl ? parseInt(runtimeHoursEl.value) || 0 : 0;
+    const runtimeMins = runtimeMinutesEl ? parseInt(runtimeMinutesEl.value) || 0 : 0;
+    const runtimeMinutes = (formatVal === 'audiobook' && (runtimeHours || runtimeMins)) ? (runtimeHours * 60 + runtimeMins) : null;
     const publishYearEl = document.getElementById('f_publish_year');
     const publishYearRaw = publishYearEl ? publishYearEl.value.trim() : (b.publishYear ? String(b.publishYear) : '');
     const publisherEl = document.getElementById('f_publisher');
@@ -1382,7 +1398,8 @@ setupTypeahead('f_author', 'f_author_dropdown', fetchAuthorResults, renderAuthor
       seriesOrder: seriesOrderRaw ? parseInt(seriesOrderRaw) : null,
       ownsHardCopy,
       format: formatVal || null,
-      pages: pagesRaw ? parseInt(pagesRaw) : null,
+      pages: formatVal === 'audiobook' ? null : (pagesRaw ? parseInt(pagesRaw) : null),
+      runtimeMinutes,
       publisher: publisher || null,
       publishYear: publishYearRaw ? parseInt(publishYearRaw) : null,
       status: newStatus,
