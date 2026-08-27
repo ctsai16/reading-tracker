@@ -584,11 +584,12 @@ function openDetail(id){
   if (b.publisher) pubBits.push(escapeHtml(b.publisher));
   if (b.publishYear) pubBits.push('Pub. ' + b.publishYear);
   const pubLine = pubBits.length ? '<div class="date-line">'+pubBits.join(' · ')+'</div>' : '';
-  const addedLine = (!meta.showDate && b.dateAdded) ? '<div class="date-line">Added '+escapeHtml(b.dateAdded)+'</div>' : '';
+  const startedLine = (b.status === 'reading' && b.dateStarted) ? '<div class="date-line">Started '+escapeHtml(b.dateStarted)+'</div>' : '';
+  const addedLine = (!meta.showDate && b.dateAdded && !startedLine) ? '<div class="date-line">Added '+escapeHtml(b.dateAdded)+'</div>' : '';
   const finishedLine = (meta.showDate && b.dateFinished) ? '<div class="date-line">'+meta.dateLabel+' '+escapeHtml(b.dateFinished)+'</div>' : '';
   const readingDays = (b.status === 'completed' && b.dateStarted && b.dateFinished) ? Math.max(1, daysBetweenInclusive(b.dateStarted, b.dateFinished)) : null;
   const readingDurationLine = readingDays ? '<div class="date-line">Read in '+readingDays+' day'+(readingDays === 1 ? '' : 's')+'</div>' : '';
-  const dateBlock = finishedLine + readingDurationLine + addedLine + pubLine;
+  const dateBlock = finishedLine + readingDurationLine + startedLine + addedLine + pubLine;
   const hardCopyBlock = '<div class="field-label">Hard copy</div><div style="display:flex;align-items:center;gap:8px;font-size:14px;color:var(--ink);">' +
     '<i style="display:inline-block;width:18px;height:18px;border-radius:5px;background:'+(b.ownsHardCopy?'var(--grass)':'#EFE7D6')+';position:relative;flex-shrink:0;">' +
     (b.ownsHardCopy ? '<span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;font-weight:700;">✓</span>' : '') +
@@ -598,11 +599,43 @@ function openDetail(id){
     '<div class="field-label">Your rating</div>' +
     '<div class="stars">'+ (b.rating ? starsHtml(b.rating) : '<span style="font-family:Quicksand, sans-serif;font-weight:600;font-size:12px;color:var(--ink-soft);">Not rated</span>') +'</div>';
 
+  let progressBlock = '';
+  if (b.status === 'reading'){
+    if (b.pages){
+      const currentPage = Math.max(0, Math.min(b.pages, b.currentPage || 0));
+      const pct = Math.max(0, Math.min(100, Math.round((currentPage / b.pages) * 100)));
+      const lastProgressEntry = (b.history || []).filter(h => h.status === 'progress').slice(-1)[0];
+      const lastUpdatedLine = lastProgressEntry ? '<div class="progress-updated">Last updated '+escapeHtml(lastProgressEntry.date)+'</div>' : '';
+      progressBlock =
+        '<div class="field-label">Reading progress</div>' +
+        '<div class="progress-block">' +
+          '<div class="progress-bar-track"><div class="progress-bar-fill" style="width:'+pct+'%;"></div></div>' +
+          '<div class="progress-numbers">' +
+            '<span class="progress-pages">Page '+currentPage+' of '+b.pages+'</span>' +
+            '<span class="progress-pct">'+pct+'%</span>' +
+          '</div>' +
+          lastUpdatedLine +
+          '<button class="update-progress-btn" id="updateProgressBtn">✏️ Update progress</button>' +
+          '<div class="update-progress-panel" id="updateProgressPanel">' +
+            '<div class="field-label">Current page</div>' +
+            '<div class="progress-input-row">' +
+              '<input type="text" inputmode="numeric" pattern="[0-9]*" value="'+currentPage+'" id="pageInput">' +
+              '<span>of '+b.pages+' pages</span>' +
+            '</div>' +
+            '<button class="progress-save-btn" id="saveProgressBtn">Save progress</button>' +
+            '<button class="finished-btn" id="finishedBtn">🎉 I finished this book!</button>' +
+          '</div>' +
+        '</div>';
+    } else {
+      progressBlock = '<div class="field-label">Reading progress</div><p class="review-empty">Add a page count (via Edit) to track progress.</p>';
+    }
+  }
+
   let transitionButtons = '';
   if (b.status === 'tbr'){
     transitionButtons = '<button id="startReadingBtn" class="btn-lav" style="background:var(--lav);">Start Reading</button><button id="finishBtn" style="background:var(--grass);">Mark as Finished</button>';
   } else if (b.status === 'reading'){
-    transitionButtons = '<button id="finishBtn" style="background:var(--grass);">Mark as Finished</button><button id="dnfBtn" style="background:var(--tangerine);">Did Not Finish</button>';
+    transitionButtons = '<button id="moveToTbrBtn" class="btn-lav" style="background:var(--lav);">Move to TBR</button><button id="dnfBtn" style="background:var(--tangerine);">Did Not Finish</button>';
   } else if (b.status === 'dnf'){
     transitionButtons = '<button id="retryBtn" class="btn-lav" style="background:var(--lav);">Want to Try Reading Again</button>';
   } else if (b.status === 'completed'){
@@ -616,11 +649,44 @@ function openDetail(id){
     '</div>';
 
   const HISTORY_LABELS = { tbr: 'Added to TBR', reading: 'Started reading', completed: 'Marked as finished', dnf: 'Marked as did not finish' };
-  const historyBlock = (b.history && b.history.length) ?
-    '<div class="field-label" style="margin-top:24px;">Shelf history</div>' +
-    '<ul style="list-style:none;padding:0;margin:0;">' +
-      b.history.map(h => '<li style="font-size:13px;color:var(--ink-soft);padding:6px 0;border-bottom:1px dashed #FFDDBB;">'+escapeHtml(h.label || HISTORY_LABELS[h.status] || h.status)+' — '+escapeHtml(h.date)+'</li>').join('') +
-    '</ul>' : '';
+  const plainHistoryLi = (h) => '<li>'+escapeHtml(h.label || HISTORY_LABELS[h.status] || h.status)+' — '+escapeHtml(h.date)+'</li>';
+  let historyItemsHtml = '';
+  if (b.history && b.history.length){
+    if (b.status === 'completed'){
+      let i = 0;
+      let groupCounter = 0;
+      const parts = [];
+      while (i < b.history.length){
+        const h = b.history[i];
+        if (h.status === 'progress'){
+          const run = [];
+          while (i < b.history.length && b.history[i].status === 'progress'){ run.push(b.history[i]); i++; }
+          groupCounter++;
+          const gid = 'progressGroup' + groupCounter;
+          const count = run.length;
+          const detailItems = run.map(e => '<li>'+escapeHtml(e.label || ('Updated to page ' + e.page))+' — '+escapeHtml(e.date)+'</li>').join('');
+          parts.push(
+            '<li class="progress-summary-item" id="'+gid+'_row">' +
+              '<div class="progress-summary-row">' +
+                '<span class="progress-summary-text">'+count+' progress update'+(count===1?'':'s')+'</span>' +
+                '<span class="progress-summary-toggle" id="'+gid+'_toggle">Show details</span>' +
+              '</div>' +
+              '<ul class="progress-detail-list" id="'+gid+'">'+detailItems+'</ul>' +
+            '</li>'
+          );
+        } else {
+          parts.push(plainHistoryLi(h));
+          i++;
+        }
+      }
+      historyItemsHtml = parts.join('');
+    } else {
+      historyItemsHtml = b.history.map(plainHistoryLi).join('');
+    }
+  }
+  const historyBlock = historyItemsHtml ?
+    '<div class="field-label" style="margin-top:24px;">Book history</div>' +
+    '<ul class="history-list">'+historyItemsHtml+'</ul>' : '';
 
   const rightPage =
     '<div class="page right">' +
@@ -636,6 +702,7 @@ function openDetail(id){
       '<h2 class="book-title">'+escapeHtml(b.title)+'</h2>' +
       '<p class="book-author">'+escapeHtml(b.author || 'Unknown author')+'</p>' +
       '<div class="tag-row">'+genreTag+seriesTag+formatTag+'</div>' +
+      progressBlock +
       ratingBlock +
       spiceBlock +
       hardCopyBlock +
@@ -658,6 +725,28 @@ function openDetail(id){
   if (dnfBtn) dnfBtn.onclick = () => markDnf(b.id);
   const rereadBtn = document.getElementById('rereadBtn');
   if (rereadBtn) rereadBtn.onclick = () => rereadBook(b.id);
+  const moveToTbrBtn = document.getElementById('moveToTbrBtn');
+  if (moveToTbrBtn) moveToTbrBtn.onclick = () => moveToTbr(b.id);
+  const updateProgressBtn = document.getElementById('updateProgressBtn');
+  if (updateProgressBtn) updateProgressBtn.onclick = () => {
+    document.getElementById('updateProgressPanel').classList.add('open');
+  };
+  const pageInputEl = document.getElementById('pageInput');
+  if (pageInputEl) pageInputEl.addEventListener('input', () => {
+    pageInputEl.value = pageInputEl.value.replace(/[^0-9]/g, '');
+  });
+  const saveProgressBtn = document.getElementById('saveProgressBtn');
+  if (saveProgressBtn) saveProgressBtn.onclick = () => saveProgress(b.id);
+  const finishedFromProgressBtn = document.getElementById('finishedBtn');
+  if (finishedFromProgressBtn) finishedFromProgressBtn.onclick = () => finishFromProgress(b.id);
+  document.querySelectorAll('.progress-summary-item').forEach(row => {
+    row.addEventListener('click', () => {
+      const list = row.querySelector('.progress-detail-list');
+      const toggle = row.querySelector('.progress-summary-toggle');
+      const isOpen = list.classList.toggle('open');
+      toggle.textContent = isOpen ? 'Hide details' : 'Show details';
+    });
+  });
 }
 
 function markAsFinished(id){
@@ -705,6 +794,56 @@ async function rereadBook(id){
   await saveBooks();
   if (currentLibrary !== 'reading'){
     currentLibrary = 'reading';
+    updateToggleActiveStates();
+    updateAddButtonLabel();
+  }
+  render();
+  openDetail(id);
+}
+
+async function saveProgress(id){
+  const idx = books.findIndex(x => x.id === id);
+  if (idx === -1) return;
+  const pageInputEl = document.getElementById('pageInput');
+  const pages = books[idx].pages || 0;
+  const raw = parseInt(pageInputEl ? pageInputEl.value : '', 10);
+  const page = Math.max(0, Math.min(pages, isNaN(raw) ? 0 : raw));
+  const date = new Date().toISOString().slice(0, 10);
+  const history = (books[idx].history ? books[idx].history.slice() : []);
+  history.push({ status: 'progress', page, date, label: 'Updated to page ' + page });
+  books[idx] = Object.assign({}, books[idx], { currentPage: page, history: history });
+  await saveBooks();
+  render();
+  openDetail(id);
+}
+
+async function finishFromProgress(id){
+  const idx = books.findIndex(x => x.id === id);
+  if (idx === -1) return;
+  const dateFinished = new Date().toISOString().slice(0, 10);
+  const history = (books[idx].history ? books[idx].history.slice() : []);
+  history.push({ status: 'completed', date: dateFinished });
+  books[idx] = Object.assign({}, books[idx], { status: 'completed', dateFinished: dateFinished, history: history });
+  await saveBooks();
+  if (currentLibrary !== 'completed'){
+    currentLibrary = 'completed';
+    updateToggleActiveStates();
+    updateAddButtonLabel();
+  }
+  render();
+  openDetail(id);
+}
+
+async function moveToTbr(id){
+  const idx = books.findIndex(x => x.id === id);
+  if (idx === -1) return;
+  const date = new Date().toISOString().slice(0, 10);
+  const history = (books[idx].history ? books[idx].history.slice() : []);
+  history.push({ status: 'tbr', date });
+  books[idx] = Object.assign({}, books[idx], { status: 'tbr', history: history });
+  await saveBooks();
+  if (currentLibrary !== 'tbr'){
+    currentLibrary = 'tbr';
     updateToggleActiveStates();
     updateAddButtonLabel();
   }
