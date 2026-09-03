@@ -1543,6 +1543,7 @@ setupTypeahead('f_author', 'f_author_dropdown', fetchAuthorResults, renderAuthor
       publishYear: publishYearRaw ? parseInt(publishYearRaw) : null,
       status: newStatus,
       dateAdded: existing ? (existing.dateAdded || existing.dateFinished || null) : (dateFinished || new Date().toISOString().slice(0, 10)),
+      currentPage: existing ? existing.currentPage : undefined,
       history: history
     };
 
