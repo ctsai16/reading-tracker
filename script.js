@@ -812,6 +812,12 @@ async function saveProgress(id){
   const history = (books[idx].history ? books[idx].history.slice() : []);
   history.push({ status: 'progress', page, date, label: 'Updated to page ' + page });
   books[idx] = Object.assign({}, books[idx], { currentPage: page, history: history });
+
+  if (pages && page >= pages && confirm('You\'ve reached the end of the book (page ' + page + ' of ' + pages + '). Mark it as finished?')){
+    await finishFromProgress(id);
+    return;
+  }
+
   await saveBooks();
   render();
   openDetail(id);
