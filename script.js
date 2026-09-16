@@ -808,12 +808,18 @@ async function saveProgress(id){
   const pages = books[idx].pages || 0;
   const raw = parseInt(pageInputEl ? pageInputEl.value : '', 10);
   const page = Math.max(0, Math.min(pages, isNaN(raw) ? 0 : raw));
+
+  if (pages && page >= pages){
+    const finish = confirm('You\'ve reached the end of the book (page ' + page + ' of ' + pages + '). Mark it as finished?');
+    if (!finish) return;
+  }
+
   const date = new Date().toISOString().slice(0, 10);
   const history = (books[idx].history ? books[idx].history.slice() : []);
   history.push({ status: 'progress', page, date, label: 'Updated to page ' + page });
   books[idx] = Object.assign({}, books[idx], { currentPage: page, history: history });
 
-  if (pages && page >= pages && confirm('You\'ve reached the end of the book (page ' + page + ' of ' + pages + '). Mark it as finished?')){
+  if (pages && page >= pages){
     await finishFromProgress(id);
     return;
   }
