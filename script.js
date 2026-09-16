@@ -435,6 +435,10 @@ function computeCompletedStats(){
   };
 }
 
+function trimDecimal(n){
+  return n.toFixed(1).replace(/\.0$/, '');
+}
+
 const EMPTY_FUN_FACT = 'Your reading story starts with one book — add your first finished read!';
 const FUN_FACT_TEMPLATES = [
   (s) => `You've finished ${s.totalBooks} book${s.totalBooks === 1 ? '' : 's'} — that's ${s.totalPages.toLocaleString()} pages turned!`,
@@ -442,7 +446,30 @@ const FUN_FACT_TEMPLATES = [
   (s) => s.topGenre ? `Your most-read genre is ${s.topGenre.name}, with ${s.topGenre.count} book${s.topGenre.count === 1 ? '' : 's'}.` : null,
   (s) => s.topAuthor ? `You've read ${s.topAuthor.name} the most — ${s.topAuthor.count} book${s.topAuthor.count === 1 ? '' : 's'} so far.` : null,
   (s) => s.genreCount ? `You've explored ${s.genreCount} different genre${s.genreCount === 1 ? '' : 's'}.` : null,
-  (s) => s.authorCount ? `${s.authorCount} different author${s.authorCount === 1 ? '' : 's'} have kept you company on the page.` : null
+  (s) => s.authorCount ? `${s.authorCount} different author${s.authorCount === 1 ? '' : 's'} have kept you company on the page.` : null,
+  (s) => {
+    if (!s.totalBooks) return null;
+    const stackHeightM = s.totalBooks * 0.025;
+    const buildingHeightM = 443;
+    const ratio = stackHeightM / buildingHeightM;
+    const heightLabel = stackHeightM < 1 ? Math.round(stackHeightM * 100) + 'cm' : trimDecimal(stackHeightM) + 'm';
+    let comparison;
+    if (ratio >= 1){
+      const buildings = Math.round(ratio);
+      comparison = `about ${buildings} Empire State Building${buildings === 1 ? '' : 's'} stacked on top of itself`;
+    } else {
+      const pct = Math.round(ratio * 100);
+      comparison = pct === 0 ? 'less than 1% of the height of the Empire State Building' : `about ${pct}% of the height of the Empire State Building`;
+    }
+    return `Stack your ${s.totalBooks} finished book${s.totalBooks === 1 ? '' : 's'} and you'd have a tower about ${heightLabel} tall — that's ${comparison}!`;
+  },
+  (s) => {
+    if (!s.totalPages) return null;
+    const lengthM = s.totalPages * 0.15;
+    const fields = lengthM / 100;
+    const comparison = fields < 1 ? `about ${Math.round(fields * 100)}% of a football field` : `about ${trimDecimal(fields)} football fields`;
+    return `If you laid all ${s.totalPages.toLocaleString()} pages you've read end to end, they'd stretch about ${Math.round(lengthM).toLocaleString()}m — that's ${comparison}!`;
+  }
 ];
 
 function pickFunFact(stats){
