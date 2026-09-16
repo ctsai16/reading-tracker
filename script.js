@@ -1290,7 +1290,7 @@ function renderForm(existing, forceStatus, prefill){
     '<div class="page left" style="grid-column:1 / -1;">' +
       '<h2 class="book-title">'+formTitle+'</h2>' +
       '<div class="form-grid">' +
-        '<div><label>Format</label><div class="format-picker" id="f_format"></div></div>' +
+        (b.status === 'tbr' ? '' : '<div><label>Format</label><div class="format-picker" id="f_format"></div></div>') +
         '<div class="typeahead-wrap"><label>Title</label><input type="text" id="f_title" value="'+escapeHtml(b.title)+'" placeholder="a book title" autocomplete="off"><div class="typeahead-dropdown" id="f_title_dropdown" style="display:none;"></div></div>' +
         '<div class="two-col">' +
           '<div class="typeahead-wrap"><label>Author</label><input type="text" id="f_author" value="'+escapeHtml(b.author)+'" placeholder="Author name" autocomplete="off"><div class="typeahead-dropdown" id="f_author_dropdown" style="display:none;"></div></div>' +
